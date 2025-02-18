@@ -12,7 +12,9 @@ type APIClient = {
   deleteOrder: (id: number) => void;
 };
 
-type JustGetters<T> = T;
+type JustGetters<T> = {
+  [K in keyof T as K extends `get${string}` ? K : never]: T[K];
+};
 
 type APIClientGetters = JustGetters<APIClient>;
 
@@ -22,5 +24,5 @@ function deleteById(client: APIClientGetters, id: number) {
 }
 
 export function getAllOrders(client: APIClientGetters) {
-  return client.getOrders();
+  return client.getOrders()
 }

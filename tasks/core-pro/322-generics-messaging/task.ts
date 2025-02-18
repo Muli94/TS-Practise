@@ -1,10 +1,14 @@
+type MessageType = 'orderCreated' | 'orderCancelled';
+
 interface Message {
   type: MessageType;
 }
 
+interface Items { productId: string; quantity: number }
+
 interface Order {
   orderId: string;
-  items: { productId: string; quantity: number }[];
+  items: Items[];
 }
 
 export interface OrderCreatedMessage {
@@ -17,19 +21,38 @@ export interface OrderCancelledMessage {
   payload: { orderId: string };
 }
 
-export class MessageBus {
-  private subscribers: any;
+type Subscribers = {
+  orderCancelled?: (message: OrderCancelledMessage) => void;
+  orderCreated?: (message: OrderCreatedMessage) => void;
+}
 
-  subscribe(type: any, subscriber: (message: any) => void): void {
-    throw new Error('Not implemented');
+export class MessageBus {
+  private subscribers: Subscribers = {};
+
+  subscribe<T extends OrderCreatedMessage | OrderCancelledMessage>(type: MessageType, subscriber: (message: T) => void): void {
+   if (type === 'orderCreated') {
+     this.subscribers.orderCreated = subscriber as (message: OrderCreatedMessage) => void;
+   } else {
+     this.subscribers.orderCancelled = subscriber as (message: OrderCancelledMessage) => void;
+   }
   }
 
-  publish(message: any): void {
-    throw new Error('Not implemented');
+  publish<T extends OrderCreatedMessage | OrderCancelledMessage>(message: T): void {
+    if (message.type === 'orderCancelled') {
+      this.subscribers[message.type]?.(message);
+      return;
+    } else if (message.type === 'orderCreated') {
+      this.subscribers[message.type]?.(message);
+      return;
+    }
+
+    throw new Error('Wrong message type');
   }
 }
 
 export class InventoryStockTracker {
+  private orders: Order[] = [];
+
   constructor(
     private bus: MessageBus,
     private stock: Record<string, number>,
@@ -38,7 +61,25 @@ export class InventoryStockTracker {
   }
 
   private subscribeToMessages(): void {
-    throw new Error('Not implemented');
+    this.bus.subscribe<OrderCreatedMessage>('orderCreated', (message: OrderCreatedMessage) => {
+      this.orders.push(message.payload);
+
+      message.payload.items.forEach((elem: Items) => {
+        this.stock[elem.productId] -= elem.quantity;
+      })
+    })
+
+    this.bus.subscribe<OrderCancelledMessage>('orderCancelled', (message: OrderCancelledMessage) => {
+      const cancelledOrder = this.orders.find((elem: Order) => elem.orderId === message.payload.orderId);
+
+      if (!cancelledOrder) {
+        return;
+      }
+
+      cancelledOrder.items.forEach((elem: Items) => {
+        this.stock[elem.productId] += elem.quantity;
+      })
+    })
   }
 
   getStock(productId: string): number {
